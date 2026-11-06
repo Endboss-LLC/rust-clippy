@@ -1,7 +1,7 @@
 # Resume — module cycle lint prototype
 
 Created: 2026-11-06T1814Z
-Updated: 2026-11-06T1822Z
+Updated: 2026-11-06T1853Z
 Branch: module-cycles-lint
 
 ## Goal
@@ -23,22 +23,27 @@ Prepare the fork lint for an upstream design discussion without posting upstream
 - UI fixtures cover the crate root, nested modules, longer cycles, grandchild cycles, a parent outside a sibling cycle, and feature-specific module expectations.
 - Macro fixtures now use sibling modules so the parent-child exemption cannot hide their coverage.
 - Prototype lint docs explain the exemption, unresolved trait calls, active configurations, and module-wide expectations.
+- The delayed independent review found no correctness defect in the follow-up. It identified a missing parent-child-chain fixture and unnecessary cache entries.
+- The follow-up now checks parent → child → grandchild → parent and caches only searches that other edges can reuse.
+- Parent-child checks now run after the SCC filter. Both the crate-root and nested fixtures are retained to cover the root guard and ordinary nesting.
 - The author cut pass retained the existing SCC and BFS implementation. No configuration or graph-file subsystem was added.
-- The lint patch is 930 added lines from `5ac3102bb`, including prose, snapshots and registration, excluding this internal handoff. The Rust fixtures and lint source account for 667 lines, including lint docs.
+- The lint patch is 983 added lines from `5ac3102bb`, including prose, snapshots and registration, excluding this internal handoff. The Rust fixtures and lint source account for 696 lines, including lint docs.
 
 ## Next action
 
-Run the required fresh Claude simplification review of the final checkpoint, address findings, then remove this internal handoff before any upstream patch.
+Await upstream feedback on the proposed design and willingness to review AI-created code. Before an upstream patch, have Kevin author the required prose and diagnostics and remove this internal handoff.
 
 ## Open decisions or blockers
 
-- The required opposite-family review failed immediately with `Claude API rate limit reached`. Do not treat the author review as an independent review.
+- The opposite-family review resumed after the rate limit and completed. It inspected the follow-up and its fixtures, but did not independently reread unchanged earlier fixtures or measure performance.
 - Upstream must agree to review AI-created code before a PR. Its current policy also requires human authorship of documentation and diagnostic messages.
 - The parent-child exemption is a proposed design choice for upstream discussion, not an upstream-approved rule.
 - Existing performance measurements describe the earlier prototype, not this follow-up.
 
 ## Last focused verification
 
+- After the review fixes, `TESTNAME=module_cycles cargo test` passed in Docker, including formatting, all module-cycle fixtures, dogfood and metadata tests. Evidence: `/tmp/clippy-cycle-review-final.log`.
+- The new parent-child-chain case reports all three references and their cycle paths. The longer-cycle fixture now expects ten diagnostics.
 - Docker image: `clippy-bench:nightly-2026-10-30`, with `rustc-dev`; repository mounted at `/clippy`, build output at `/target`.
 - `TESTNAME=module_cycles_parent_child cargo test --test compile-test` failed before the change with six unwanted cycle diagnostics and passed after it.
 - `TESTNAME=module_cycles cargo test` exercised all cycle fixtures and the on/off feature revisions. Formatting, config checks and dogfood completed. The lint-attribute ordering check then found the new fixture's attribute order.
@@ -87,6 +92,7 @@ This is a drafting aid, not an upstream-ready comment. Minor editing does not ch
 
 - Fork PR: https://github.com/Endboss-LLC/rust-clippy/pull/1
 - Upstream idea: https://github.com/rust-lang/rust-clippy/issues/5782
+- Kevin's posted comment: https://github.com/rust-lang/rust-clippy/issues/5782#issuecomment-6692768765
 - Policy: https://forge.rust-lang.org/policies/llm-usage
 - Clippy interpretation: https://doc.rust-lang.org/nightly/clippy/development/llm_usage.html
 - Feature workflow: `/home/kevin/.codex/skills/claude/feature/SKILL.md`

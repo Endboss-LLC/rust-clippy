@@ -70,4 +70,27 @@ mod grandchild {
     }
 }
 
+mod parent_child_chain {
+    pub struct Value;
+
+    pub fn run() {
+        child::run();
+        //~^ module_cycles
+    }
+
+    mod child {
+        pub fn run() {
+            grandchild::run();
+            //~^ module_cycles
+        }
+
+        mod grandchild {
+            pub fn run() {
+                let _ = super::super::Value;
+                //~^ module_cycles
+            }
+        }
+    }
+}
+
 fn main() {}

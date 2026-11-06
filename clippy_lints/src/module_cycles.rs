@@ -214,20 +214,26 @@ impl<'tcx> LateLintPass<'tcx> for ModuleCycles {
         );
         let sccs: Sccs<usize, usize> = Sccs::new(&graph);
         let name = |module: usize| with_crate_prefix!(cx.tcx.def_path_str(modules[module]));
-        // Ordinary edges share a search. Parent-child edges exclude the immediate return
-        // edge so the diagnostic names a longer cycle when one exists.
+        // Parent-child searches exclude a different edge each time, so only ordinary
+        // searches can share cached paths.
         let mut paths = FxHashMap::default();
 
-        for (&(from, to), references) in &self.edges {
-            let parent_child = is_direct_parent(cx.tcx, from, to) || is_direct_parent(cx.tcx, to, from);
-            let (from, to) = (index(from), index(to));
+        for (&(from_module, to_module), references) in &self.edges {
+            let (from, to) = (index(from_module), index(to_module));
             if sccs.scc(from) != sccs.scc(to) {
                 continue;
             }
-            let excluded_first_step = parent_child.then_some(from);
-            let previous = paths
-                .entry((to, excluded_first_step))
-                .or_insert_with(|| shortest_paths_from(&graph, modules.len(), to, excluded_first_step));
+            let parent_child_paths;
+            let previous = if is_direct_parent(cx.tcx, from_module, to_module)
+                || is_direct_parent(cx.tcx, to_module, from_module)
+            {
+                parent_child_paths = shortest_paths_from(&graph, modules.len(), to, Some(from));
+                &parent_child_paths
+            } else {
+                paths
+                    .entry(to)
+                    .or_insert_with(|| shortest_paths_from(&graph, modules.len(), to, None))
+            };
             if previous[from].is_none() {
                 continue;
             }
