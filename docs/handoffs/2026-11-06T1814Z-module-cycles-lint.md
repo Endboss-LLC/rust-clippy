@@ -1,7 +1,7 @@
 # Resume — module cycle lint prototype
 
 Created: 2026-11-06T1814Z
-Updated: 2026-11-06T1817Z
+Updated: 2026-11-06T1822Z
 Branch: module-cycles-lint
 
 ## Goal
@@ -56,14 +56,26 @@ These are AI-generated drafting notes for Kevin, not a comment to paste upstream
 - Explain the parent-child choice with a concrete example: a parent calls a helper in its child, while the helper uses a type from the parent. Exempt that two-module cycle; retain longer cycles.
 - Mention that macro-written modules count as their containing module and that compiler-generated test-harness references are ignored.
 - State the limits: active configurations only, no inferred dynamic implementations, and missed dependencies through implicit conversions and other compiler-added calls.
+- Explain why the existing tools did not meet this project's requirements. Keep the public draft to one paragraph; use the version-specific evidence below for follow-up questions.
 - Historical measurements on the earlier prototype used 52 crates and about 297k Rust lines. Three alternating enabled/disabled runs on a shared host had overlapping CPU ranges. This is evidence about that workload, not a zero-cost guarantee or a new measurement of this revision.
 - Human authorship is still needed for the lint documentation, comments and diagnostic messages intended for upstream. Disclosure and a reviewer agreement do not waive that requirement.
+
+### Other approaches investigated
+
+- `cargo metadata` describes packages and targets; Graphviz renders a supplied graph. Neither supplies the resolved references within a crate that this check needs.
+- The `cargo-modules` 0.28.0 approach inspected imports and types but omitted function bodies, missing the body-only module cycles in our fixtures. Its graph output remained useful for architectural inspection.
+- Cargo Bylaw at `7d3cf0fe28d133730193084224cf500ff87b9b7a` used rust-analyzer and supported body analysis, but our fixtures exposed gaps in nested generic types, method calls and macro output. We patched these and adapted package/feature isolation. A full isolated scan then remained too expensive for our check-time budget.
+- A standalone rustc-driver prototype established that compiler information could cover the required references. Running that as another mandatory compiler pass would still repeat analysis, so the next prototype put collection inside the Clippy invocations the gate already runs.
+- Dylint was discussed as a way to package custom lints, not benchmarked as an implemented alternative. Do not imply that it was ruled out experimentally.
+- These are findings about the revisions and integration tested here, not a survey of current tool releases. The earlier analyzer and compiler timings were not an equal-cache, controlled comparison; omit speedup ratios.
 
 ### AI-generated private draft
 
 This is a drafting aid, not an upstream-ready comment. Minor editing does not change its AI origin. Use the facts above to write your own message independently.
 
 > Is there still interest in an opt-in module-cycle lint for this issue? We have an internal prototype in https://github.com/Endboss-LLC/rust-clippy/pull/1 and would like feedback on the design before proposing a PR.
+>
+> We first investigated standalone tools. The `cargo-modules` version we inspected omitted function-body references. Cargo Bylaw needed fixes for nested types, method calls and macro output; even after those fixes, separate analysis across our isolated package and feature configurations exceeded our check-time budget. That led us to reuse rustc's resolved information during the Clippy checks we already run. These findings concern the versions and integration we tested, rather than every standalone approach.
 >
 > It is a restriction lint that reports individual cyclic references, so normal `allow` and `expect` attributes work. It treats macro-written modules as part of their containing module and ignores test-harness references. One proposed exemption permits a cycle of only a parent and its direct child, while retaining longer cycles through that pair.
 >
