@@ -11,6 +11,7 @@ use rustc_lint::{LateContext, LateLintPass, impl_lint_pass};
 use rustc_middle::ty::print::with_crate_prefix;
 use rustc_middle::ty::{Instance, TyCtxt};
 use rustc_span::Span;
+use rustc_span::hygiene::{AstPass, ExpnKind};
 
 declare_clippy_lint! {
     /// ### What it does
@@ -18,12 +19,25 @@ declare_clippy_lint! {
     ///
     /// A module depends on another module when it names an item defined there, calls a
     /// method or an operator implemented there, or reads a field of a type defined there.
-    /// The lint is emitted once for every dependency that is part of a cycle, at the
-    /// first place where that dependency occurs.
+    /// The lint is emitted at every such reference that is part of a cycle, so `#[allow]`
+    /// and `#[expect]` apply to one reference at a time.
+    ///
+    /// A module written by a macro counts as part of the module that contains the macro
+    /// call. References from the `main` function that `--test` adds are ignored.
     ///
     /// ### Why restrict this?
     /// Modules in a cycle cannot be understood, tested, or moved to a separate crate one at
     /// a time. An acyclic module graph keeps the layering of a crate explicit.
+    ///
+    /// ### Known problems
+    /// The lint does not record a dependency that goes only through a call the compiler
+    /// adds, such as:
+    /// - the `From` conversion in `?`
+    /// - `IntoIterator` in a `for` loop
+    /// - an automatic `Deref`
+    /// - `Display` through `format!`
+    /// - a local `From` implementation reached through `.into()`, which resolves to the
+    ///   blanket `Into` implementation of the standard library
     ///
     /// ### Example
     /// ```no_run
@@ -65,8 +79,8 @@ impl_lint_pass!(ModuleCycles => [MODULE_CYCLES]);
 
 #[derive(Default)]
 pub struct ModuleCycles {
-    /// The first reference from one module to another, keyed by `(from, to)`.
-    edges: FxIndexMap<(LocalDefId, LocalDefId), (HirId, Span)>,
+    /// Every reference from one module to another, keyed by `(from, to)`.
+    edges: FxIndexMap<(LocalDefId, LocalDefId), FxIndexMap<HirId, Span>>,
 }
 
 impl ModuleCycles {
@@ -74,44 +88,70 @@ impl ModuleCycles {
         let Some(target) = target.as_local() else {
             return;
         };
+        if generated_by_test_harness(tcx.def_span(source.owner)) {
+            return;
+        }
         let from = enclosing_module(tcx, source.owner.def_id);
         let to = enclosing_module(tcx, target);
         if from != to {
-            self.edges.entry((from, to)).or_insert((source, span));
+            self.edges.entry((from, to)).or_default().entry(source).or_insert(span);
+        }
+    }
+
+    /// Records the implementation that a call of the trait method `target` selects.
+    fn record_implementation(&mut self, cx: &LateContext<'_>, expr: &Expr<'_>, target: DefId) {
+        let args = cx.typeck_results().node_args(expr.hir_id);
+        // `try_resolve` panics when the arguments do not match the generics of `target`.
+        if cx.tcx.def_kind(target) == DefKind::AssocFn
+            && args.len() == cx.tcx.generics_of(target).count()
+            && let Ok(Some(instance)) = Instance::try_resolve(cx.tcx, cx.typing_env(), target, args)
+        {
+            self.record(cx.tcx, expr.hir_id, instance.def_id(), expr.span);
         }
     }
 }
 
 /// The module that contains `def_id`, or `def_id` itself if it is a module.
+///
+/// A module written by a macro counts as part of the module that contains it. For example,
+/// the `PyO3` crate writes a `mod f` for each `#[pyfunction] fn f`, and that module refers
+/// back to its parent, so every binding would otherwise be a cycle.
 fn enclosing_module(tcx: TyCtxt<'_>, mut def_id: LocalDefId) -> LocalDefId {
-    while tcx.def_kind(def_id) != DefKind::Mod {
+    while tcx.def_kind(def_id) != DefKind::Mod
+        || (!def_id.is_top_level_module() && tcx.def_span(def_id).from_expansion())
+    {
         def_id = tcx.local_parent(def_id);
     }
     def_id
 }
 
-/// The nodes after `from` on a shortest path from `from` to `to`, found by a breadth-first search.
-fn shortest_path(graph: &VecGraph<usize>, from: usize, to: usize) -> Vec<usize> {
-    let mut previous = FxHashMap::default();
-    let mut queue = VecDeque::from([from]);
-    while let Some(node) = queue.pop_front()
-        && node != to
-    {
+/// Whether `span` comes from the `main` function that `--test` adds to the crate root.
+/// That function refers to every test, so it would put each test module in a cycle.
+fn generated_by_test_harness(span: Span) -> bool {
+    let mut context = span.ctxt();
+    while !context.is_root() {
+        let expansion = context.outer_expn_data();
+        if matches!(expansion.kind, ExpnKind::AstPass(AstPass::TestHarness)) {
+            return true;
+        }
+        context = expansion.call_site.ctxt();
+    }
+    false
+}
+
+/// For every node reachable from `start`, the node before it on a shortest path from `start`.
+fn shortest_paths_from(graph: &VecGraph<usize>, num_nodes: usize, start: usize) -> Vec<Option<usize>> {
+    let mut previous = vec![None; num_nodes];
+    let mut queue = VecDeque::from([start]);
+    while let Some(node) = queue.pop_front() {
         for &next in graph.successors(node) {
-            if next != from && !previous.contains_key(&next) {
-                previous.insert(next, node);
+            if next != start && previous[next].is_none() {
+                previous[next] = Some(node);
                 queue.push_back(next);
             }
         }
     }
-    let mut path = vec![to];
-    while let Some(&node) = previous.get(path.last().unwrap())
-        && node != from
-    {
-        path.push(node);
-    }
-    path.reverse();
-    path
+    previous
 }
 
 impl<'tcx> LateLintPass<'tcx> for ModuleCycles {
@@ -125,13 +165,15 @@ impl<'tcx> LateLintPass<'tcx> for ModuleCycles {
         let typeck = cx.typeck_results();
         if let Some(target) = typeck.type_dependent_def_id(expr.hir_id) {
             self.record(cx.tcx, expr.hir_id, target, expr.span);
-            // A call of a trait method also depends on the module of the selected implementation.
-            if cx.tcx.def_kind(target) == DefKind::AssocFn
-                && let Ok(Some(instance)) =
-                    Instance::try_resolve(cx.tcx, cx.typing_env(), target, typeck.node_args(expr.hir_id))
-            {
-                self.record(cx.tcx, expr.hir_id, instance.def_id(), expr.span);
-            }
+        }
+        // A call of a trait method also depends on the module of the selected implementation.
+        // `qpath_res` also covers a fully qualified call such as `Action::run(value)`.
+        let called = match &expr.kind {
+            ExprKind::Path(qpath) => cx.qpath_res(qpath, expr.hir_id).opt_def_id(),
+            _ => typeck.type_dependent_def_id(expr.hir_id),
+        };
+        if let Some(target) = called {
+            self.record_implementation(cx, expr, target);
         }
         if let ExprKind::Field(receiver, _) = expr.kind
             && let Some(adt) = typeck.expr_ty_adjusted(receiver).peel_refs().ty_adt_def()
@@ -149,32 +191,46 @@ impl<'tcx> LateLintPass<'tcx> for ModuleCycles {
         );
         let sccs: Sccs<usize, usize> = Sccs::new(&graph);
         let name = |module: usize| with_crate_prefix!(cx.tcx.def_path_str(modules[module]));
+        // One breadth-first search for each module that a cyclic edge points to, not one for each edge.
+        let mut paths = FxHashMap::default();
 
-        for (&(from, to), &(hir_id, span)) in &self.edges {
+        for (&(from, to), references) in &self.edges {
             let (from, to) = (index(from), index(to));
             if sccs.scc(from) != sccs.scc(to) {
                 continue;
             }
-            let cycle = [from, to]
+            let previous = paths
+                .entry(to)
+                .or_insert_with(|| shortest_paths_from(&graph, modules.len(), to));
+            let mut cycle = vec![from];
+            let mut node = from;
+            while node != to {
+                node = previous[node].unwrap();
+                cycle.push(node);
+            }
+            cycle.push(from);
+            cycle.reverse();
+            let cycle = cycle
                 .into_iter()
-                .chain(shortest_path(&graph, to, from))
                 .map(|module| format!("`{}`", name(module)))
                 .collect::<Vec<_>>()
                 .join(" -> ");
-            span_lint_hir_and_then(
-                cx,
-                MODULE_CYCLES,
-                hir_id,
-                span,
-                format!(
-                    "module `{}` depends on `{}`, which depends back on it",
-                    name(from),
-                    name(to)
-                ),
-                |diag| {
-                    diag.note(format!("module cycle: {cycle}"));
-                },
-            );
+            for (&hir_id, &span) in references {
+                span_lint_hir_and_then(
+                    cx,
+                    MODULE_CYCLES,
+                    hir_id,
+                    span,
+                    format!(
+                        "module `{}` depends on `{}`, which depends back on it",
+                        name(from),
+                        name(to)
+                    ),
+                    |diag| {
+                        diag.note(format!("module cycle: {cycle}"));
+                    },
+                );
+            }
         }
     }
 }

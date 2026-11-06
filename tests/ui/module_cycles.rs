@@ -38,6 +38,7 @@ mod nested_generic_types {
 }
 
 mod macro_generated {
+    // `first` counts as part of `macro_generated`, so the cycle is reported under that name.
     macro_rules! make_first {
         () => {
             mod first {
@@ -130,6 +131,10 @@ mod trait_calls {
         pub fn dynamic(value: &dyn Action) {
             value.run();
         }
+        pub fn qualified(value: super::values::Value) {
+            Action::run(&value);
+            //~^ module_cycles
+        }
     }
 }
 
@@ -151,6 +156,7 @@ mod field_access {
             let holder = super::first::make();
             //~^ module_cycles
             holder.value
+            //~^ module_cycles
         }
     }
 }
@@ -179,15 +185,65 @@ mod three_modules {
 mod expected {
     mod first {
         #[expect(clippy::module_cycles)]
-        pub fn run() {
+        pub fn expected() {
             super::second::run();
+        }
+        pub fn reported() {
+            super::second::run();
+            //~^ module_cycles
         }
     }
     mod second {
         pub fn run() {
-            super::first::run();
+            super::first::expected();
             //~^ module_cycles
         }
+    }
+}
+
+mod field_read {
+    mod values {
+        pub struct Holder {
+            pub value: u32,
+        }
+        pub fn check() -> u32 {
+            super::reader::read()
+            //~^ module_cycles
+        }
+    }
+    mod factory {
+        pub fn make() -> super::values::Holder {
+            //~^ module_cycles
+            super::values::Holder { value: 1 }
+            //~^ module_cycles
+        }
+    }
+    mod reader {
+        // The field read is the only reference from `reader` to `values`.
+        pub fn read() -> u32 {
+            super::factory::make().value
+            //~^ module_cycles
+            //~| module_cycles
+        }
+    }
+}
+
+mod macro_written_modules {
+    macro_rules! binding {
+        ($name:ident) => {
+            pub mod $name {
+                pub fn make() -> u32 {
+                    super::helper()
+                }
+            }
+        };
+    }
+    binding!(first);
+    fn helper() -> u32 {
+        1
+    }
+    pub fn run() -> u32 {
+        first::make()
     }
 }
 
