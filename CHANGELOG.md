@@ -7422,6 +7422,7 @@ Released 2018-09-13
 [`mixed_case_hex_literals`]: https://clippy.rust-lang.org/main/index.html#mixed_case_hex_literals
 [`mixed_read_write_in_expression`]: https://clippy.rust-lang.org/main/index.html#mixed_read_write_in_expression
 [`mod_module_files`]: https://clippy.rust-lang.org/main/index.html#mod_module_files
+[`module_cycles`]: https://clippy.rust-lang.org/main/index.html#module_cycles
 [`module_inception`]: https://clippy.rust-lang.org/main/index.html#module_inception
 [`module_name_repetitions`]: https://clippy.rust-lang.org/main/index.html#module_name_repetitions
 [`modulo_arithmetic`]: https://clippy.rust-lang.org/main/index.html#modulo_arithmetic
