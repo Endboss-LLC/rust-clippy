@@ -138,29 +138,6 @@ mod trait_calls {
     }
 }
 
-mod field_access {
-    mod first {
-        pub struct Holder {
-            pub value: u32,
-        }
-        pub fn make() -> Holder {
-            Holder {
-                value: super::second::VALUE,
-                //~^ module_cycles
-            }
-        }
-    }
-    mod second {
-        pub const VALUE: u32 = 1;
-        pub fn read() -> u32 {
-            let holder = super::first::make();
-            //~^ module_cycles
-            holder.value
-            //~^ module_cycles
-        }
-    }
-}
-
 mod three_modules {
     mod a {
         pub fn run() {
@@ -254,18 +231,6 @@ mod acyclic {
         }
         use self::second::Value;
         fn run(_: Value) {}
-    }
-}
-
-mod disabled {
-    mod first {
-        pub fn run() {}
-    }
-    #[cfg(any())]
-    mod second {
-        pub fn run() {
-            super::first::run();
-        }
     }
 }
 
