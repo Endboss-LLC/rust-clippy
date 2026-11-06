@@ -246,6 +246,7 @@ mod missing_fields_in_debug;
 mod missing_inline;
 mod missing_trait_methods;
 mod mixed_read_write_in_expression;
+mod module_cycles;
 mod module_style;
 mod multi_assignments;
 mod multiple_bound_locations;
@@ -876,6 +877,7 @@ rustc_lint::late_lint_methods!(
         BufreaderStdin: bufreader_stdin::BufreaderStdin = bufreader_stdin::BufreaderStdin::new(),
         IfsAsLogicalOps: ifs_as_logical_ops::IfsAsLogicalOps = ifs_as_logical_ops::IfsAsLogicalOps,
         UndocumentedMayPanicCall: undocumented_may_panic_call::UndocumentedMayPanicCall = undocumented_may_panic_call::UndocumentedMayPanicCall::new(tcx, conf),
+        ModuleCycles: module_cycles::ModuleCycles = module_cycles::ModuleCycles::default(),
         // add late passes here, used by `cargo dev new_lint`
     ]]
 );

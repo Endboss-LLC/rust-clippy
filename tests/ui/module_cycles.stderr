@@ -1,0 +1,199 @@
+error: module `crate::methods::behavior` depends on `crate::methods::caller`, which depends back on it
+  --> tests/ui/module_cycles.rs:15:17
+   |
+LL |                 super::caller::helper();
+   |                 ^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::methods::behavior` -> `crate::methods::caller` -> `crate::methods::behavior`
+   = note: `-D clippy::module-cycles` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::module_cycles)]`
+
+error: module `crate::methods::caller` depends on `crate::methods::behavior`, which depends back on it
+  --> tests/ui/module_cycles.rs:23:13
+   |
+LL |             value.ping();
+   |             ^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::methods::caller` -> `crate::methods::behavior` -> `crate::methods::caller`
+
+error: module `crate::nested_generic_types::first` depends on `crate::nested_generic_types::second`, which depends back on it
+  --> tests/ui/module_cycles.rs:31:53
+   |
+LL |         pub struct First(pub Option<Vec<std::rc::Rc<super::second::Second>>>);
+   |                                                     ^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::nested_generic_types::first` -> `crate::nested_generic_types::second` -> `crate::nested_generic_types::first`
+
+error: module `crate::nested_generic_types::second` depends on `crate::nested_generic_types::first`, which depends back on it
+  --> tests/ui/module_cycles.rs:35:64
+   |
+LL |         pub struct Second(pub std::marker::PhantomData<fn() -> super::first::First>);
+   |                                                                ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::nested_generic_types::second` -> `crate::nested_generic_types::first` -> `crate::nested_generic_types::second`
+
+error: module `crate::macro_generated::host` depends on `crate::macro_generated::second`, which depends back on it
+  --> tests/ui/module_cycles.rs:47:25
+   |
+LL |         macro_rules! make_first {
+...
+LL |                         super::super::second::run();
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+LL |         make_first!();
+   |         ------------- in this macro invocation
+   |
+   = note: module cycle: `crate::macro_generated::host` -> `crate::macro_generated::second` -> `crate::macro_generated::host`
+
+error: module `crate::macro_generated::second` depends on `crate::macro_generated::host`, which depends back on it
+  --> tests/ui/module_cycles.rs:57:13
+   |
+LL |             super::host::first::run();
+   |             ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::macro_generated::second` -> `crate::macro_generated::host` -> `crate::macro_generated::second`
+
+error: module `crate::external_macro_generated::host` depends on `crate::external_macro_generated::caller`, which depends back on it
+  --> tests/ui/module_cycles.rs:67:9
+   |
+LL | /         proc_macros::external! {
+LL | |             pub mod generated {
+LL | |                 pub fn run() {
+LL | |                     crate::external_macro_generated::caller::helper();
+...  |
+LL | |         }
+   | |_________^
+   |
+   = note: module cycle: `crate::external_macro_generated::host` -> `crate::external_macro_generated::caller` -> `crate::external_macro_generated::host`
+   = note: this error originates in the macro `proc_macros::external` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: module `crate::external_macro_generated::caller` depends on `crate::external_macro_generated::host`, which depends back on it
+  --> tests/ui/module_cycles.rs:78:13
+   |
+LL |             super::host::generated::run();
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::external_macro_generated::caller` -> `crate::external_macro_generated::host` -> `crate::external_macro_generated::caller`
+
+error: module `crate::operators::impls` depends on `crate::operators::caller`, which depends back on it
+  --> tests/ui/module_cycles.rs:92:17
+   |
+LL |                 super::caller::helper();
+   |                 ^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::operators::impls` -> `crate::operators::caller` -> `crate::operators::impls`
+
+error: module `crate::operators::caller` depends on `crate::operators::impls`, which depends back on it
+  --> tests/ui/module_cycles.rs:101:21
+   |
+LL |             let _ = left + right;
+   |                     ^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::operators::caller` -> `crate::operators::impls` -> `crate::operators::caller`
+
+error: module `crate::trait_calls::behavior` depends on `crate::trait_calls::caller`, which depends back on it
+  --> tests/ui/module_cycles.rs:119:17
+   |
+LL |                 super::caller::helper();
+   |                 ^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::trait_calls::behavior` -> `crate::trait_calls::caller` -> `crate::trait_calls::behavior`
+
+error: module `crate::trait_calls::caller` depends on `crate::trait_calls::behavior`, which depends back on it
+  --> tests/ui/module_cycles.rs:128:13
+   |
+LL |             value.run();
+   |             ^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::trait_calls::caller` -> `crate::trait_calls::behavior` -> `crate::trait_calls::caller`
+
+error: module `crate::trait_calls::caller` depends on `crate::trait_calls::behavior`, which depends back on it
+  --> tests/ui/module_cycles.rs:139:13
+   |
+LL |             Action::run(&value);
+   |             ^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::trait_calls::caller` -> `crate::trait_calls::behavior` -> `crate::trait_calls::caller`
+
+error: module `crate::three_modules::a` depends on `crate::three_modules::b`, which depends back on it
+  --> tests/ui/module_cycles.rs:148:13
+   |
+LL |             super::b::run();
+   |             ^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::three_modules::a` -> `crate::three_modules::b` -> `crate::three_modules::c` -> `crate::three_modules::a`
+
+error: module `crate::three_modules::b` depends on `crate::three_modules::c`, which depends back on it
+  --> tests/ui/module_cycles.rs:154:13
+   |
+LL |             super::c::run();
+   |             ^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::three_modules::b` -> `crate::three_modules::c` -> `crate::three_modules::a` -> `crate::three_modules::b`
+
+error: module `crate::three_modules::c` depends on `crate::three_modules::a`, which depends back on it
+  --> tests/ui/module_cycles.rs:160:13
+   |
+LL |             super::a::run();
+   |             ^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::three_modules::c` -> `crate::three_modules::a` -> `crate::three_modules::b` -> `crate::three_modules::c`
+
+error: module `crate::expected::first` depends on `crate::expected::second`, which depends back on it
+  --> tests/ui/module_cycles.rs:173:13
+   |
+LL |             super::second::run();
+   |             ^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::expected::first` -> `crate::expected::second` -> `crate::expected::first`
+
+error: module `crate::expected::second` depends on `crate::expected::first`, which depends back on it
+  --> tests/ui/module_cycles.rs:179:13
+   |
+LL |             super::first::expected();
+   |             ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::expected::second` -> `crate::expected::first` -> `crate::expected::second`
+
+error: module `crate::field_read::values` depends on `crate::field_read::reader`, which depends back on it
+  --> tests/ui/module_cycles.rs:191:13
+   |
+LL |             super::reader::read()
+   |             ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::field_read::values` -> `crate::field_read::reader` -> `crate::field_read::values`
+
+error: module `crate::field_read::factory` depends on `crate::field_read::values`, which depends back on it
+  --> tests/ui/module_cycles.rs:196:26
+   |
+LL |         pub fn make() -> super::values::Holder {
+   |                          ^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::field_read::factory` -> `crate::field_read::values` -> `crate::field_read::reader` -> `crate::field_read::factory`
+
+error: module `crate::field_read::factory` depends on `crate::field_read::values`, which depends back on it
+  --> tests/ui/module_cycles.rs:198:13
+   |
+LL |             super::values::Holder { value: 1 }
+   |             ^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::field_read::factory` -> `crate::field_read::values` -> `crate::field_read::reader` -> `crate::field_read::factory`
+
+error: module `crate::field_read::reader` depends on `crate::field_read::values`, which depends back on it
+  --> tests/ui/module_cycles.rs:205:13
+   |
+LL |             super::factory::make().value
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::field_read::reader` -> `crate::field_read::values` -> `crate::field_read::reader`
+
+error: module `crate::field_read::reader` depends on `crate::field_read::factory`, which depends back on it
+  --> tests/ui/module_cycles.rs:205:13
+   |
+LL |             super::factory::make().value
+   |             ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::field_read::reader` -> `crate::field_read::factory` -> `crate::field_read::values` -> `crate::field_read::reader`
+
+error: aborting due to 23 previous errors
+

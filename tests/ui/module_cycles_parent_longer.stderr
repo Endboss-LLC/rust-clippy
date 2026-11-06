@@ -1,0 +1,84 @@
+error: module `crate::longer_cycle::parent` depends on `crate::longer_cycle::parent::child`, which depends back on it
+  --> tests/ui/module_cycles_parent_longer.rs:9:13
+   |
+LL |             child::run();
+   |             ^^^^^^^^^^
+   |
+   = note: module cycle: `crate::longer_cycle::parent` -> `crate::longer_cycle::parent::child` -> `crate::longer_cycle::other` -> `crate::longer_cycle::parent`
+   = note: `-D clippy::module-cycles` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::module_cycles)]`
+
+error: module `crate::longer_cycle::parent::child` depends on `crate::longer_cycle::other`, which depends back on it
+  --> tests/ui/module_cycles_parent_longer.rs:16:17
+   |
+LL |                 super::super::other::run();
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::longer_cycle::parent::child` -> `crate::longer_cycle::other` -> `crate::longer_cycle::parent` -> `crate::longer_cycle::parent::child`
+
+error: module `crate::longer_cycle::other` depends on `crate::longer_cycle::parent`, which depends back on it
+  --> tests/ui/module_cycles_parent_longer.rs:24:21
+   |
+LL |             let _ = super::parent::Value;
+   |                     ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::longer_cycle::other` -> `crate::longer_cycle::parent` -> `crate::longer_cycle::parent::child` -> `crate::longer_cycle::other`
+
+error: module `crate::parent_outside_sibling_cycle::parent::child` depends on `crate::parent_outside_sibling_cycle::other`, which depends back on it
+  --> tests/ui/module_cycles_parent_longer.rs:41:17
+   |
+LL |                 super::super::other::run();
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::parent_outside_sibling_cycle::parent::child` -> `crate::parent_outside_sibling_cycle::other` -> `crate::parent_outside_sibling_cycle::parent::child`
+
+error: module `crate::parent_outside_sibling_cycle::other` depends on `crate::parent_outside_sibling_cycle::parent::child`, which depends back on it
+  --> tests/ui/module_cycles_parent_longer.rs:49:13
+   |
+LL |             super::parent::child::run();
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::parent_outside_sibling_cycle::other` -> `crate::parent_outside_sibling_cycle::parent::child` -> `crate::parent_outside_sibling_cycle::other`
+
+error: module `crate::grandchild` depends on `crate::grandchild::child::grandchild`, which depends back on it
+  --> tests/ui/module_cycles_parent_longer.rs:59:9
+   |
+LL |         child::grandchild::run();
+   |         ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::grandchild` -> `crate::grandchild::child::grandchild` -> `crate::grandchild`
+
+error: module `crate::grandchild::child::grandchild` depends on `crate::grandchild`, which depends back on it
+  --> tests/ui/module_cycles_parent_longer.rs:66:25
+   |
+LL |                 let _ = super::super::Value;
+   |                         ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::grandchild::child::grandchild` -> `crate::grandchild` -> `crate::grandchild::child::grandchild`
+
+error: module `crate::parent_child_chain` depends on `crate::parent_child_chain::child`, which depends back on it
+  --> tests/ui/module_cycles_parent_longer.rs:77:9
+   |
+LL |         child::run();
+   |         ^^^^^^^^^^
+   |
+   = note: module cycle: `crate::parent_child_chain` -> `crate::parent_child_chain::child` -> `crate::parent_child_chain::child::grandchild` -> `crate::parent_child_chain`
+
+error: module `crate::parent_child_chain::child` depends on `crate::parent_child_chain::child::grandchild`, which depends back on it
+  --> tests/ui/module_cycles_parent_longer.rs:83:13
+   |
+LL |             grandchild::run();
+   |             ^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::parent_child_chain::child` -> `crate::parent_child_chain::child::grandchild` -> `crate::parent_child_chain` -> `crate::parent_child_chain::child`
+
+error: module `crate::parent_child_chain::child::grandchild` depends on `crate::parent_child_chain`, which depends back on it
+  --> tests/ui/module_cycles_parent_longer.rs:89:25
+   |
+LL |                 let _ = super::super::Value;
+   |                         ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: module cycle: `crate::parent_child_chain::child::grandchild` -> `crate::parent_child_chain` -> `crate::parent_child_chain::child` -> `crate::parent_child_chain::child::grandchild`
+
+error: aborting due to 10 previous errors
+
