@@ -24,6 +24,9 @@ declare_clippy_lint! {
     ///
     /// A module written by a macro counts as part of the module that contains the macro
     /// call. References from the `main` function that `--test` adds are ignored.
+    /// A cycle of only a module and its direct child is not reported. A parent can call
+    /// a helper in a child module that uses the parent's types. Longer cycles that pass
+    /// through a parent and child are still reported, as are cycles with a grandchild.
     ///
     /// ### Why restrict this?
     /// Modules in a cycle cannot be understood, tested, or moved to a separate crate one at
@@ -38,6 +41,17 @@ declare_clippy_lint! {
     /// - `Display` through `format!`
     /// - a local `From` implementation reached through `.into()`, which resolves to the
     ///   blanket `Into` implementation of the standard library
+    ///
+    /// A generic or dynamic trait call does not select a concrete implementation. Only
+    /// its dependency on the trait is recorded.
+    ///
+    /// The lint checks only the active configuration. Code excluded by `#[cfg]` is not
+    /// part of the graph. Check each feature configuration that the crate supports.
+    ///
+    /// To adopt the lint in a crate with existing cycles, use `#[expect]` on individual
+    /// references or modules. A module-level expectation also covers new cycles from
+    /// that module. An expectation for a feature-specific cycle needs a matching
+    /// `#[cfg_attr]`, or it will be unfulfilled when that feature is disabled.
     ///
     /// ### Example
     /// ```no_run
@@ -140,18 +154,27 @@ fn generated_by_test_harness(span: Span) -> bool {
 }
 
 /// For every node reachable from `start`, the node before it on a shortest path from `start`.
-fn shortest_paths_from(graph: &VecGraph<usize>, num_nodes: usize, start: usize) -> Vec<Option<usize>> {
+fn shortest_paths_from(
+    graph: &VecGraph<usize>,
+    num_nodes: usize,
+    start: usize,
+    excluded_first_step: Option<usize>,
+) -> Vec<Option<usize>> {
     let mut previous = vec![None; num_nodes];
     let mut queue = VecDeque::from([start]);
     while let Some(node) = queue.pop_front() {
         for &next in graph.successors(node) {
-            if next != start && previous[next].is_none() {
+            if !(node == start && Some(next) == excluded_first_step) && next != start && previous[next].is_none() {
                 previous[next] = Some(node);
                 queue.push_back(next);
             }
         }
     }
     previous
+}
+
+fn is_direct_parent(tcx: TyCtxt<'_>, parent: LocalDefId, child: LocalDefId) -> bool {
+    !child.is_top_level_module() && enclosing_module(tcx, tcx.local_parent(child)) == parent
 }
 
 impl<'tcx> LateLintPass<'tcx> for ModuleCycles {
@@ -191,17 +214,23 @@ impl<'tcx> LateLintPass<'tcx> for ModuleCycles {
         );
         let sccs: Sccs<usize, usize> = Sccs::new(&graph);
         let name = |module: usize| with_crate_prefix!(cx.tcx.def_path_str(modules[module]));
-        // One breadth-first search for each module that a cyclic edge points to, not one for each edge.
+        // Ordinary edges share a search. Parent-child edges exclude the immediate return
+        // edge so the diagnostic names a longer cycle when one exists.
         let mut paths = FxHashMap::default();
 
         for (&(from, to), references) in &self.edges {
+            let parent_child = is_direct_parent(cx.tcx, from, to) || is_direct_parent(cx.tcx, to, from);
             let (from, to) = (index(from), index(to));
             if sccs.scc(from) != sccs.scc(to) {
                 continue;
             }
+            let excluded_first_step = parent_child.then_some(from);
             let previous = paths
-                .entry(to)
-                .or_insert_with(|| shortest_paths_from(&graph, modules.len(), to));
+                .entry((to, excluded_first_step))
+                .or_insert_with(|| shortest_paths_from(&graph, modules.len(), to, excluded_first_step));
+            if previous[from].is_none() {
+                continue;
+            }
             let mut cycle = vec![from];
             let mut node = from;
             while node != to {
